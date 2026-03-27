@@ -30,7 +30,8 @@
 | № | Тема | Статус | Ссылка |
 |---|------|--------|--------|
 | 1 | Метод Монте-Карло (Вычисление площади) | ✅ Готово | [lab-01](./lab-01-monte-carlo/) |
-| 2 | ??? | ⬜ Не начато | — |
+| 2 | Метод Бюффона ( Вычисления числа $$ \pi $$ ) | ✅ Готово | [lab-02](./lab-02-buffon-needle/) |
+| 3 | ??? | ⬜ Не начато | — |
 
 ---
 
@@ -58,7 +59,7 @@ math-modeling-labs/
 ### 1. Клонировать репозиторий
 
 ```
-git clone https://github.com/arushinofu/math-modeling-labs.git
+git clone https://github.com/arshinov-dev/math-modeling-labs.git
 cd math-modeling-labs
 ```
 
@@ -94,17 +95,17 @@ pip install -r requirements.txt
 
 | Автор | Никнейм |
 |:-:|:-:|
-| Arshinov Maxim | [@arushinofu](https://github.com/arushinofu)|
+| Arshinov Maxim | [@arshinov-dev](https://github.com/arshinov-dev)|
 
 > Другие учебные проекты: <https://github.com/topics/arh-education>
 
 ---
 
 <p align="center">
-  <img src="https://github.com/arushinofu/git-learning/blob/main/assets/images/avatar.png" alt="Логотип" width="85">
+  <img src="https://github.com/arshinov-dev/git-learning/blob/main/assets/images/avatar.png" alt="Логотип" width="85">
 </p>
 
-<p align="center">© arushinofu 2026</p>
+<p align="center">© arushinov 2026</p>
 
 <div align="center">
 
