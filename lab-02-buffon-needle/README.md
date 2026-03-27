@@ -106,8 +106,9 @@ lab-02/
 ├── config.py                 # Конфигурация задачи
 ├── lab2.py                   # Основной скрипт
 ├── README.md                 # Этот файл
-├── examples/                 # Пример графика для README
-│   └── variant-01.svg
+├── examples/                 # Для README
+│   └── example.png           # Пример графика
+│   └── task.pdf              # Условия задачи
 └── plots/                    # Графики
 ```
 <div align="center">
