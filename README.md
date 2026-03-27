@@ -105,7 +105,7 @@ pip install -r requirements.txt
   <img src="https://github.com/arshinov-dev/git-learning/blob/main/assets/images/avatar.png" alt="Логотип" width="85">
 </p>
 
-<p align="center">© arushinov 2026</p>
+<p align="center">© arshinov 2026</p>
 
 <div align="center">
 
