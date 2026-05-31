@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Визуализатор амплитудного квантования</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+        .value-display {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #667eea;
+            margin-top: 5px;
+        }
+        .canvas-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .graph-box {
+            background: #fff;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            position: relative;
+        }
+        .graph-title {
+            position: absolute;
+            top: 10px;
+            left: 15px;
+            font-weight: bold;
+            color: #333;
+            background: rgba(255,255,255,0.9);
+            padding: 5px 10px;
+            border-radius: 5px;
+            z-index: 10;
+        }
+        canvas {
+            width: 100%;
+            height: 300px;
+            display: block;
+        }
+        .info-panel {
+            background: #e3f2fd;
+            border-left: 5px solid #2196F3;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .formula {
+            background: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+            text-align: center;
+            font-size: 16px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .stat-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        @media (max-width: 768px) {
+            .canvas-container {
+                grid-template-columns: 1fr;
+            }
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎚️ Визуализатор амплитудного квантования</h1>
+        <div class="subtitle">Интерактивная демонстрация процесса квантования сигналов</div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>📊 Разрядность АЦП (бит):</label>
+                <input type="range" id="bits" min="2" max="8" value="4" step="1">
+                <div class="value-display" id="bitsValue">4 бита = 16 уровней</div>
+            </div>
+            
+            <div class="control-group">
+                <label>📈 Частота сигнала (Гц):</label>
+                <input type="range" id="frequency" min="1" max="10" value="2" step="0.5">
+                <div class="value-display" id="freqValue">2 Гц</div>
+            </div>
+            
+            <div class="control-group">
+                <label>🎯 Амплитуда сигнала:</label>
+                <input type="range" id="amplitude" min="10" max="100" value="80" step="10">
+                <div class="value-display" id="ampValue">80%</div>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <div class="graph-box">
+                <div class="graph-title">📐 Характеристика квантования</div>
+                <canvas id="canvas1"></canvas>
+            </div>
+            <div class="graph-box">
+                <div class="graph-title">📡 Входной и квантованный сигналы</div>
+                <canvas id="canvas2"></canvas>
+            </div>
+        </div>
+
+        <div class="graph-box" style="margin-bottom: 20px;">
+            <div class="graph-title">📉 Шум квантования q(t)</div>
+            <canvas id="canvas3"></canvas>
+        </div>
+
+        <div class="info-panel">
+            <h3>📐 Основные формулы:</h3>
+            <div class="formula">
+                Шаг квантования: Δ = U<sub>max</sub> / N = U<sub>max</sub> / 2<sup>n</sup>
+            </div>
+            <div class="formula">
+                Максимальная погрешность: q<sub>max</sub> = Δ / 2
+            </div>
+            <div class="formula">
+                Дисперсия шума: σ² = Δ² / 12
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value" id="levelsCount">16</div>
+                <div class="stat-label">Уровней квантования (N)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="stepValue">6.25%</div>
+                <div class="stat-label">Шаг квантования (Δ)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="errorValue">3.125%</div>
+                <div class="stat-label">Макс. погрешность (Δ/2)</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Canvas setup
+        const canvas1 = document.getElementById('canvas1');
+        const canvas2 = document.getElementById('canvas2');
+        const canvas3 = document.getElementById('canvas3');
+        const ctx1 = canvas1.getContext('2d');
+        const ctx2 = canvas2.getContext('2d');
+        const ctx3 = canvas3.getContext('2d');
+
+        // Set canvas size
+        function resizeCanvases() {
+            [canvas1, canvas2, canvas3].forEach(canvas => {
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+            });
+            draw();
+        }
+
+        // Controls
+        const bitsSlider = document.getElementById('bits');
+        const freqSlider = document.getElementById('frequency');
+        const ampSlider = document.getElementById('amplitude');
+
+        // Update displays
+        function updateDisplays() {
+            const bits = parseInt(bitsSlider.value);
+            const levels = Math.pow(2, bits);
+            document.getElementById('bitsValue').textContent = `${bits} бит${bits === 1 ? '' : 'а'} = ${levels} уровн${levels === 1 ? 'ь' : levels < 5 ? 'я' : 'ей'}`;
+            document.getElementById('freqValue').textContent = `${freqSlider.value} Гц`;
+            document.getElementById('ampValue').textContent = `${ampSlider.value}%`;
+            
+            // Update stats
+            document.getElementById('levelsCount').textContent = levels;
+            const step = 100 / levels;
+            document.getElementById('stepValue').textContent = `${step.toFixed(2)}%`;
+            document.getElementById('errorValue').textContent = `${(step/2).toFixed(2)}%`;
+        }
+
+        // Quantization function
+        function quantize(value, levels, maxVal) {
+            const step = maxVal / levels;
+            return Math.round(value / step) * step;
+        }
+
+        // Draw functions
+        function draw() {
+            const bits = parseInt(bitsSlider.value);
+            const levels = Math.pow(2, bits);
+            const frequency = parseFloat(freqSlider.value);
+            const amplitude = parseFloat(ampSlider.value) / 100;
+            
+            const width = canvas1.width;
+            const height = canvas1.height;
+            const maxVal = 100;
+            const step = maxVal / levels;
+
+            // Clear canvases
+            [ctx1, ctx2, ctx3].forEach(ctx => {
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                ctx.strokeStyle = '#e0e0e0';
+                ctx.lineWidth = 1;
+                // Grid
+                for (let i = 0; i <= 10; i++) {
+                    const x = (i / 10) * width;
+                    const y = (i / 10) * height;
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, height);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(width, y);
+                    ctx.stroke();
+                }
+            });
+
+            // Canvas 1: Quantization characteristic
+            ctx1.strokeStyle = '#667eea';
+            ctx1.lineWidth = 3;
+            ctx1.beginPath();
+            for (let i = 0; i <= levels; i++) {
+                const x = (i / levels) * width;
+                const y = height - (i / levels) * height;
+                if (i === 0) {
+                    ctx1.moveTo(x, y);
+                } else {
+                    ctx1.lineTo(x, y);
+                    ctx1.lineTo(x, height - ((i-1) / levels) * height);
+                }
+            }
+            ctx1.stroke();
+
+            // Draw ideal line
+            ctx1.strokeStyle = '#ccc';
+            ctx1.lineWidth = 1;
+            ctx1.setLineDash([5, 5]);
+            ctx1.beginPath();
+            ctx1.moveTo(0, height);
+            ctx1.lineTo(width, 0);
+            ctx1.stroke();
+            ctx1.setLineDash([]);
+
+            // Draw delta
+            const deltaY = height / levels;
+            ctx1.strokeStyle = '#f44336';
+            ctx1.lineWidth = 2;
+            ctx1.beginPath();
+            ctx1.moveTo(width * 0.7, height * 0.3);
+            ctx1.lineTo(width * 0.7, height * 0.3 + deltaY);
+            ctx1.stroke();
+            ctx1.fillStyle = '#f44336';
+            ctx1.font = 'bold 14px Arial';
+            ctx1.fillText('Δ', width * 0.72, height * 0.3 + deltaY/2);
+
+            // Canvas 2: Signals
+            const numPoints = 1000;
+            const timePoints = [];
+            const analogSignal = [];
+            const quantizedSignal = [];
+            const noise = [];
+
+            for (let i = 0; i < numPoints; i++) {
+                const t = i / numPoints;
+                timePoints.push(t);
+                const analog = amplitude * Math.sin(2 * Math.PI * frequency * t) * 50 + 50;
+                analogSignal.push(analog);
+                const quantized = quantize(analog, levels, maxVal);
+                quantizedSignal.push(quantized);
+                noise.push(quantized - analog);
+            }
+
+            // Draw analog signal
+            ctx2.strokeStyle = '#4CAF50';
+            ctx2.lineWidth = 2;
+            ctx2.beginPath();
+            for (let i = 0; i < numPoints; i++) {
+                const x = (timePoints[i]) * width;
+                const y = height - (analogSignal[i] / maxVal) * height;
+                if (i === 0) ctx2.moveTo(x, y);
+                else ctx2.lineTo(x, y);
+            }
+            ctx2.stroke();
+
+            // Draw quantized signal
+            ctx2.strokeStyle = '#2196F3';
+            ctx2.lineWidth = 2;
+            ctx2.beginPath();
+            for (let i = 0; i < numPoints; i++) {
+                const x = (timePoints[i]) * width;
+                const y = height - (quantizedSignal[i] / maxVal) * height;
+                if (i === 0) ctx2.moveTo(x, y);
+                else ctx2.lineTo(x, y);
+            }
+            ctx2.stroke();
+
+            // Legend
+            ctx2.fillStyle = '#4CAF50';
+            ctx2.fillRect(10, 10, 20, 10);
+            ctx2.fillStyle = '#333';
+            ctx2.font = '12px Arial';
+            ctx2.fillText('Аналоговый сигнал', 35, 18);
+            
+            ctx2.fillStyle = '#2196F3';
+            ctx2.fillRect(150, 10, 20, 10);
+            ctx2.fillStyle = '#333';
+            ctx2.fillText('Квантованный', 175, 18);
+
+            // Canvas 3: Quantization noise
+            ctx3.strokeStyle = '#9C27B0';
+            ctx3.lineWidth = 1.5;
+            ctx3.beginPath();
+            for (let i = 0; i < numPoints; i++) {
+                const x = (timePoints[i]) * width;
+                const y = height/2 - (noise[i] / maxVal) * height;
+                if (i === 0) ctx3.moveTo(x, y);
+                else ctx3.lineTo(x, y);
+            }
+            ctx3.stroke();
+
+            // Draw delta/2 lines
+            ctx3.strokeStyle = '#f44336';
+            ctx3.lineWidth = 1;
+            ctx3.setLineDash([3, 3]);
+            ctx3.beginPath();
+            ctx3.moveTo(0, height/2 - (step/2/maxVal) * height);
+            ctx3.lineTo(width, height/2 - (step/2/maxVal) * height);
+            ctx3.moveTo(0, height/2 + (step/2/maxVal) * height);
+            ctx3.lineTo(width, height/2 + (step/2/maxVal) * height);
+            ctx3.stroke();
+            ctx3.setLineDash([]);
+
+            // Zero line
+            ctx3.strokeStyle = '#999';
+            ctx3.lineWidth = 1;
+            ctx3.beginPath();
+            ctx3.moveTo(0, height/2);
+            ctx3.lineTo(width, height/2);
+            ctx3.stroke();
+        }
+
+        // Event listeners
+        bitsSlider.addEventListener('input', () => {
+            updateDisplays();
+            draw();
+        });
+        freqSlider.addEventListener('input', () => {
+            draw();
+        });
+        ampSlider.addEventListener('input', () => {
+            draw();
+        });
+
+        window.addEventListener('resize', resizeCanvases);
+
+        // Initialize
+        resizeCanvases();
+        updateDisplays();
+    </script>
+</body>
+</html>
