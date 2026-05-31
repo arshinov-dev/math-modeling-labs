@@ -1,15 +1,22 @@
-"""Конфигурация раздела лабораторной работы №5: метод простой итерации."""
+"""Конфигурация раздела лабораторной работы №6: метод простой итерации."""
 
-# Начальное приближение для x_{n+1} = phi(x_n)
+# Функция phi(x) для x = phi(x) и её производная.
+# Разрешено: x, +, -, *, /, ^, скобки, sin, cos, tan, exp, log, sqrt, abs, pi, e.
+PHI_FORMULA = "5 / (x^2 + 2 * x + 5)"
+PHI_DERIVATIVE_FORMULA = "-10 * (x + 1) / (x^2 + 2 * x + 5)^2"
+
+# Начальное приближение и отрезок для поиска контрольного корня x = phi(x)
 X0 = 0.0
+CONTROL_A = 0.0
+CONTROL_B = 1.0
 
-# Условия останова
-EPSILON = 1e-14
-N_MAX = 10**6
+# EPSILON и N_MAX берутся из:
+# ../../lab-05-root-finding-methods/config.py
 
 # Визуализация
-PLOT_TITLE = "Лабораторная работа номер 5: метод простой итерации"
-PHI_LABEL = r"$\varphi(x)=\frac{5}{x^2+2x+5}$"
+PLOT_TITLE = "Лабораторная работа номер 6: метод простой итерации"
+PHI_LABEL = None
+PHI_DERIVATIVE_LABEL = None
 DIAGONAL_LABEL = r"$y=x$"
 OVERVIEW_FIGURE_SIZE = (10, 6)
 COBWEB_FIGURE_SIZE = (11, 7)

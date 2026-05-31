@@ -1,5 +1,5 @@
 from datetime import datetime
-from fractions import Fraction
+from functools import lru_cache
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -7,6 +7,18 @@ import numpy as np
 
 import config
 
+
+SAFE_NAMES = {
+    "sin": np.sin,
+    "cos": np.cos,
+    "tan": np.tan,
+    "exp": np.exp,
+    "log": np.log,
+    "sqrt": np.sqrt,
+    "abs": np.abs,
+    "pi": np.pi,
+    "e": np.e,
+}
 
 METHODS = (
     ("ЛПР", "Метод левых прямоугольников", "left_rectangles"),
@@ -18,26 +30,94 @@ METHODS = (
 )
 
 
+def compile_formula(formula):
+    """Компилируем формулу от x из config.py в вызываемую функцию."""
+    normalized = formula.replace("^", "**")
+    try:
+        code = compile(normalized, "<formula>", "eval")
+    except SyntaxError as exc:
+        raise ValueError(f"Некорректная формула '{formula}': {exc.msg}") from exc
+
+    unknown_names = sorted(set(code.co_names) - (set(SAFE_NAMES) | {"x"}))
+    if unknown_names:
+        names = ", ".join(unknown_names)
+        raise ValueError(f"Недопустимые имена в формуле '{formula}': {names}")
+
+    def formula_function(value):
+        scope = dict(SAFE_NAMES)
+        scope["x"] = value
+        result = eval(code, {"__builtins__": {}}, scope)
+        value_array = np.asarray(value)
+        if value_array.ndim > 0 and np.asarray(result).ndim == 0:
+            return np.full(value_array.shape, result, dtype=float)
+        return result
+
+    return formula_function
+
+
+FUNCTION = compile_formula(config.FUNCTION_FORMULA)
+
+
 def f(x):
-    """Вычисляем значение функции f(x) = (x + 1) * sqrt(1 - x)."""
-    x_values = np.asarray(x)
-    return (x_values + 1.0) * np.sqrt(np.maximum(0.0, 1.0 - x_values))
+    """Вычисляем значение подынтегральной функции из config.py."""
+    return FUNCTION(np.asarray(x, dtype=float))
 
 
-def true_area_fraction():
-    """Возвращаем аналитическое значение площади."""
-    return Fraction(14, 15)
+def simpson_reference(subintervals):
+    """Вычисляем эталонное приближение методом Симпсона."""
+    x_points = np.linspace(config.A, config.B, subintervals + 1)
+    y_points = f(x_points)
+    dx = (config.B - config.A) / subintervals
+    return float(
+        dx
+        / 3.0
+        * (
+            y_points[0]
+            + y_points[-1]
+            + 4.0 * np.sum(y_points[1:-1:2])
+            + 2.0 * np.sum(y_points[2:-1:2])
+        )
+    )
 
 
+@lru_cache(maxsize=1)
 def true_area():
-    """Возвращаем аналитическое значение площади как float."""
-    return float(true_area_fraction())
+    """Возвращаем настроенное или автоматически уточнённое значение интеграла."""
+    if config.REFERENCE_AREA is not None:
+        return float(config.REFERENCE_AREA)
+
+    subintervals = 2
+    previous = simpson_reference(subintervals)
+    for _ in range(int(config.REFERENCE_MAX_REFINEMENTS)):
+        subintervals *= 2
+        current = simpson_reference(subintervals)
+        if abs(current - previous) < config.REFERENCE_EPSILON:
+            return current
+        previous = current
+    return previous
+
+
+def reference_area_description():
+    """Описываем источник эталонного значения интеграла."""
+    if config.REFERENCE_AREA is not None:
+        return "задано в config.py"
+    return f"уточнение Симпсона до Δ < {config.REFERENCE_EPSILON:.0e}"
 
 
 def validate_config():
     """Проверяем корректность входных параметров."""
     if config.B <= config.A:
         raise ValueError("Параметр B должен быть больше A.")
+    if config.REFERENCE_EPSILON <= 0:
+        raise ValueError("Параметр REFERENCE_EPSILON должен быть больше нуля.")
+    if int(config.REFERENCE_MAX_REFINEMENTS) <= 0:
+        raise ValueError("Параметр REFERENCE_MAX_REFINEMENTS должен быть больше нуля.")
+    if config.EPSILON <= 0:
+        raise ValueError("Параметр EPSILON должен быть больше нуля.")
+    if int(config.INITIAL_N) <= 0:
+        raise ValueError("Параметр INITIAL_N должен быть больше нуля.")
+    if int(config.N_MAX) < int(config.INITIAL_N):
+        raise ValueError("Параметр N_MAX должен быть не меньше INITIAL_N.")
     if not config.N_VALUES:
         raise ValueError("Параметр N_VALUES не должен быть пустым.")
     for n in config.N_VALUES:
@@ -45,6 +125,10 @@ def validate_config():
             raise ValueError("Все значения N_VALUES должны быть больше нуля.")
     if int(config.PLOT_N) <= 0:
         raise ValueError("Параметр PLOT_N должен быть больше нуля.")
+
+    values = np.asarray(f(np.linspace(config.A, config.B, 64)), dtype=float)
+    if not np.all(np.isfinite(values)):
+        raise ValueError("FUNCTION_FORMULA должна быть конечной на всём отрезке [A; B].")
 
 
 def make_rng(n):
@@ -118,10 +202,50 @@ METHOD_FUNCTIONS = {
 }
 
 
+def refine_method(method):
+    """Уточняем результат метода до Δ < EPSILON или достижения N_MAX."""
+    n = int(config.INITIAL_N)
+    previous = method(n)
+    delta = np.inf
+
+    while n < int(config.N_MAX):
+        n_next = min(n * 2, int(config.N_MAX))
+        current = method(n_next)
+        delta = abs(current - previous)
+        if delta < config.EPSILON:
+            return {
+                "estimate": current,
+                "n": n_next,
+                "delta": delta,
+                "status": "Выполнено условие Δ < EPSILON",
+            }
+        n = n_next
+        previous = current
+
+    return {
+        "estimate": previous,
+        "n": n,
+        "delta": delta,
+        "status": "Достигнут лимит N_MAX",
+    }
+
+
+def build_refinement_results():
+    """Уточняем результат каждого метода по критериям останова из config.py."""
+    return [
+        {
+            "short_name": short_name,
+            "full_name": full_name,
+            **refine_method(METHOD_FUNCTIONS[function_name]),
+        }
+        for short_name, full_name, function_name in METHODS
+    ]
+
+
 def calculate_errors(estimate, exact_area):
     """Считаем абсолютную и относительную погрешности."""
     absolute_error = abs(estimate - exact_area)
-    relative_error = absolute_error / exact_area * 100.0
+    relative_error = absolute_error / abs(exact_area) * 100.0 if exact_area != 0 else np.nan
     return absolute_error, relative_error
 
 
@@ -259,7 +383,7 @@ def plot_function(ax):
         y_line,
         color=config.FUNCTION_COLOR,
         linewidth=2.2,
-        label=config.FUNCTION_LABEL,
+        label=config.FUNCTION_LABEL or f"f(x) = {config.FUNCTION_FORMULA}",
         zorder=3,
     )
 
@@ -270,7 +394,11 @@ def setup_method_axis(ax, title):
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.set_xlim(config.A, config.B)
-    ax.set_ylim(0, float(np.max(f(np.linspace(config.A, config.B, 200)))) * 1.12)
+    y_values = np.asarray(f(np.linspace(config.A, config.B, 200)), dtype=float)
+    y_min = min(0.0, float(np.min(y_values)))
+    y_max = max(0.0, float(np.max(y_values)))
+    padding = max((y_max - y_min) * 0.12, 1e-9)
+    ax.set_ylim(y_min - padding, y_max + padding)
     ax.grid(True, alpha=config.GRID_ALPHA)
 
 
@@ -420,7 +548,7 @@ def plot_results():
 
     fig.suptitle(
         f"{config.PLOT_TITLE}\n"
-        f"{config.FUNCTION_LABEL}, Sист={true_area_fraction()}≈{exact_area:.8f}, n={n}",
+        f"f(x)={config.FUNCTION_FORMULA}, Sэт≈{exact_area:.8f}, n={n}",
         fontsize=13,
     )
 
@@ -454,18 +582,18 @@ def plot_results():
     return saved_paths
 
 
-def print_report(results, saved_paths):
-    """Выводим аналитическое значение и таблицу результатов."""
-    exact_fraction = true_area_fraction()
+def print_report(results, refinement_results, saved_paths):
+    """Выводим эталонное значение и таблицу результатов."""
     exact_value = true_area()
 
     print("=" * 76)
     print("ЛАБОРАТОРНАЯ РАБОТА №4")
     print("Вычисление площади функции различными методами")
     print("=" * 76)
-    print(f"f(x) = (x + 1) * sqrt(1 - x)")
+    print(f"f(x) = {config.FUNCTION_FORMULA}")
     print(f"Отрезок интегрирования: [{config.A}, {config.B}]")
-    print(f"Sист = ∫[0;1] (x + 1) * sqrt(1 - x) dx = {exact_fraction} = {exact_value:.10f}")
+    print(f"Sэт = {exact_value:.10f} ({reference_area_description()})")
+    print(f"Критерии останова уточнения: Δ < {config.EPSILON:.0e} или N_MAX = {int(config.N_MAX)}")
     print("-" * 76)
     print(format_results_table(results))
     print("-" * 76)
@@ -476,6 +604,13 @@ def print_report(results, saved_paths):
         print(f"n={n}: {format_best_result(best_by_n[n])}")
     print("Лучший результат по всей таблице:")
     print(f"n={overall_best['n']}: {format_best_result(overall_best)}")
+    print("-" * 76)
+    print("АВТОМАТИЧЕСКОЕ УТОЧНЕНИЕ ПО КРИТЕРИЯМ ОСТАНОВА")
+    for value in refinement_results:
+        print(
+            f"{value['short_name']}: Ŝ={value['estimate']:.10f}; "
+            f"n={value['n']}; Δ={value['delta']:.3e}; {value['status']}"
+        )
     print("=" * 76)
     print("Файлы графика:")
     for path in saved_paths:
@@ -489,8 +624,9 @@ def main():
         raise SystemExit(f"Ошибка в параметрах config.py: {exc}") from exc
 
     results = build_results()
+    refinement_results = build_refinement_results()
     saved_paths = plot_results()
-    print_report(results, saved_paths)
+    print_report(results, refinement_results, saved_paths)
 
 
 if __name__ == "__main__":

@@ -11,21 +11,21 @@ A = 2.0
 # Начальное зерно генератора (None -> новый результат на каждом запуске)
 RANDOM_SEED = 777
 
-# Нижняя и верхняя границы области в виде формул y(x).
+# Границы области f1(x) и f2(x).
 # Разрешено: x, +, -, *, /, ^, скобки, sin, cos, tan, exp, log, sqrt, abs, pi, e.
-LOWER_FORMULA = "x^2-2"
-UPPER_FORMULA = "2-x^2"
+F1_FORMULA = "x^2 - 2"
+F2_FORMULA = "2 - x^2"
 
 # True -> включать точки на границе, False -> строго между кривыми
 INCLUDE_BORDER = True
 
 # Подписи (None -> генерируются автоматически из формул)
-LOWER_LABEL = None
-UPPER_LABEL = None
+F1_LABEL = None
+F2_LABEL = None
 
 # Цвета кривых
-LOWER_COLOR = "#1d3557"
-UPPER_COLOR = "#e63946"
+F1_COLOR = "#1d3557"
+F2_COLOR = "#e63946"
 
 # Настройки графика
 PLOT_TITLE = "Лабораторная работа номер 1: метод Монте-Карло – вариант 1"

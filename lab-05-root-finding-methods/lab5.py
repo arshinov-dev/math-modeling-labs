@@ -7,23 +7,87 @@ import numpy as np
 import config
 
 
+SAFE_NAMES = {
+    "sin": np.sin,
+    "cos": np.cos,
+    "tan": np.tan,
+    "exp": np.exp,
+    "log": np.log,
+    "sqrt": np.sqrt,
+    "abs": np.abs,
+    "pi": np.pi,
+    "e": np.e,
+}
+
+
+def compile_formula(formula):
+    """Компилируем формулу от x из config.py в вызываемую функцию."""
+    normalized = formula.replace("^", "**")
+    try:
+        code = compile(normalized, "<formula>", "eval")
+    except SyntaxError as exc:
+        raise ValueError(f"Некорректная формула '{formula}': {exc.msg}") from exc
+
+    unknown_names = sorted(set(code.co_names) - (set(SAFE_NAMES) | {"x"}))
+    if unknown_names:
+        names = ", ".join(unknown_names)
+        raise ValueError(f"Недопустимые имена в формуле '{formula}': {names}")
+
+    def formula_function(value):
+        scope = dict(SAFE_NAMES)
+        scope["x"] = value
+        result = eval(code, {"__builtins__": {}}, scope)
+        value_array = np.asarray(value)
+        if value_array.ndim > 0 and np.asarray(result).ndim == 0:
+            return np.full(value_array.shape, result, dtype=float)
+        return result
+
+    return formula_function
+
+
+FUNCTION = compile_formula(config.FUNCTION_FORMULA)
+DERIVATIVE = compile_formula(config.DERIVATIVE_FORMULA)
+
+
 def f(x):
-    """Вычисляем значение функции f(x) = 2 / (x^2 - x + 1)^2 - 1."""
-    x_values = np.asarray(x, dtype=float)
-    denominator = (x_values**2 - x_values + 1.0) ** 2
-    return 2.0 / denominator - 1.0
+    """Вычисляем значение функции варианта из config.py."""
+    return FUNCTION(np.asarray(x, dtype=float))
 
 
 def f_prime(x):
-    """Вычисляем производную функции f(x)."""
-    x_values = np.asarray(x, dtype=float)
-    denominator = (x_values**2 - x_values + 1.0) ** 3
-    return -4.0 * (2.0 * x_values - 1.0) / denominator
+    """Вычисляем производную функции варианта из config.py."""
+    return DERIVATIVE(np.asarray(x, dtype=float))
 
 
 def exact_root():
-    """Возвращаем точный корень функции на отрезке [0; 2]."""
-    return float((1.0 + np.sqrt(4.0 * np.sqrt(2.0) - 3.0)) / 2.0)
+    """Возвращаем настроенный или автоматически найденный контрольный корень."""
+    if config.REFERENCE_ROOT is not None:
+        return float(config.REFERENCE_ROOT)
+
+    a = float(config.A)
+    b = float(config.B)
+    fa = float(f(a))
+    fb = float(f(b))
+    if fa == 0.0:
+        return a
+    if fb == 0.0:
+        return b
+    if fa * fb > 0:
+        raise ValueError("Для контрольной бисекции нужна смена знака на [A; B].")
+
+    for _ in range(int(config.REFERENCE_N_MAX)):
+        midpoint = (a + b) / 2.0
+        f_midpoint = float(f(midpoint))
+        if abs(f_midpoint) < config.REFERENCE_EPSILON or abs(b - a) < config.REFERENCE_EPSILON:
+            return midpoint
+        if fa * f_midpoint < 0:
+            b = midpoint
+            fb = f_midpoint
+        else:
+            a = midpoint
+            fa = f_midpoint
+
+    return (a + b) / 2.0
 
 
 def validate_config():
@@ -36,6 +100,10 @@ def validate_config():
         raise ValueError("Параметр N_MAX должен быть больше нуля.")
     if config.DERIVATIVE_MIN_ABS <= 0:
         raise ValueError("Параметр DERIVATIVE_MIN_ABS должен быть больше нуля.")
+    if config.REFERENCE_EPSILON <= 0:
+        raise ValueError("Параметр REFERENCE_EPSILON должен быть больше нуля.")
+    if int(config.REFERENCE_N_MAX) <= 0:
+        raise ValueError("Параметр REFERENCE_N_MAX должен быть больше нуля.")
     if int(config.CURVE_SAMPLES) < 2:
         raise ValueError("Параметр CURVE_SAMPLES должен быть не меньше 2.")
     if int(config.MAX_ITERATIONS_SHOW) < 0:
@@ -173,7 +241,8 @@ def plot_base_function(ax, exact):
         config.B + config.X_MARGIN,
         int(config.CURVE_SAMPLES),
     )
-    ax.plot(x_line, f(x_line), color=config.FUNCTION_COLOR, linewidth=2.2, label=config.FUNCTION_LABEL)
+    function_label = config.FUNCTION_LABEL or f"f(x) = {config.FUNCTION_FORMULA}"
+    ax.plot(x_line, f(x_line), color=config.FUNCTION_COLOR, linewidth=2.2, label=function_label)
     ax.axhline(0.0, color="#000000", linewidth=1.0)
     ax.axvline(config.A, color="#e63946", linestyle="--", linewidth=1.4, label=f"a={config.A:g}")
     ax.axvline(config.B, color="#e63946", linestyle="--", linewidth=1.4, label=f"b={config.B:g}")
@@ -374,7 +443,7 @@ def print_report(results, metrics, saved_paths):
     print("=" * 72)
     print("ЛАБОРАТОРНАЯ РАБОТА №5: БИСЕКЦИЯ И МЕТОД КАСАТЕЛЬНЫХ")
     print("=" * 72)
-    print("Функция: f(x) = 2 / (x^2 - x + 1)^2 - 1")
+    print(f"Функция: f(x) = {config.FUNCTION_FORMULA}")
     print(f"Отрезок бисекции: [{config.A:g}; {config.B:g}]")
     print(f"Начальное приближение Ньютона: x0 = {config.X0:g}")
     print(f"Точный корень x*: {metrics['bisection']['exact']:.15f}")

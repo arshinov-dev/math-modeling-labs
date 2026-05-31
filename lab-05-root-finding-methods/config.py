@@ -1,4 +1,9 @@
-"""Конфигурация раздела лабораторной работы №5: бисекция и метод касательных."""
+"""Конфигурация лабораторной работы №5: бисекция и метод касательных."""
+
+# Уравнение f(x) = 0 и его производная.
+# Разрешено: x, +, -, *, /, ^, скобки, sin, cos, tan, exp, log, sqrt, abs, pi, e.
+FUNCTION_FORMULA = "2 / (x^2 - x + 1)^2 - 1"
+DERIVATIVE_FORMULA = "-4 * (2 * x - 1) / (x^2 - x + 1)^3"
 
 # Отрезок поиска корня для метода бисекции
 A = 0.0
@@ -12,9 +17,15 @@ EPSILON = 1e-14
 N_MAX = 10**6
 DERIVATIVE_MIN_ABS = 1e-15
 
+# Контрольный корень для расчёта погрешности.
+# None -> найти автоматически более точной бисекцией на [A; B].
+REFERENCE_ROOT = None
+REFERENCE_EPSILON = 1e-15
+REFERENCE_N_MAX = 200
+
 # Визуализация
 PLOT_TITLE = "Лабораторная работа номер 5: поиск корня функции"
-FUNCTION_LABEL = r"$f(x)=\frac{2}{(x^2-x+1)^2}-1$"
+FUNCTION_LABEL = None
 OVERVIEW_FIGURE_SIZE = (12, 6)
 ITERATIONS_FIGURE_SIZE = (12, 10)
 CONVERGENCE_FIGURE_SIZE = (14, 5)

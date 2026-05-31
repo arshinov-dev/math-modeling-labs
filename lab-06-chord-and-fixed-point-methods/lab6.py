@@ -4,7 +4,6 @@ import sys
 
 
 METHODS = (
-    ("Бисекция и метод касательных", "bisection-newton", "bisection_newton.py"),
     ("Метод хорд", "chord-method", "chord_method.py"),
     ("Метод простых итераций", "fixed-point-iteration", "fixed_point_iteration.py"),
 )

@@ -42,28 +42,48 @@ def compile_formula(formula, variable_name="x"):
     def formula_function(value):
         scope = dict(SAFE_NAMES)
         scope[variable_name] = value
-        return eval(code, {"__builtins__": {}}, scope)
+        result = eval(code, {"__builtins__": {}}, scope)
+        value_array = np.asarray(value)
+        if value_array.ndim > 0 and np.asarray(result).ndim == 0:
+            return np.full(value_array.shape, result, dtype=float)
+        return result
 
     return formula_function
 
 
 def build_region_model():
     """Строим модель области по двум формулам из config.py."""
-    lower_func = compile_formula(config.LOWER_FORMULA)
-    upper_func = compile_formula(config.UPPER_FORMULA)
+    f1 = compile_formula(config.F1_FORMULA)
+    f2 = compile_formula(config.F2_FORMULA)
+
+    def lower_func(x):
+        return np.minimum(f1(x), f2(x))
+
+    def upper_func(x):
+        return np.maximum(f1(x), f2(x))
 
     if config.INCLUDE_BORDER:
         contains = lambda x, y: (y >= lower_func(x)) & (y <= upper_func(x))
     else:
         contains = lambda x, y: (y > lower_func(x)) & (y < upper_func(x))
 
-    lower_label = config.LOWER_LABEL or f"y = {config.LOWER_FORMULA}"
-    upper_label = config.UPPER_LABEL or f"y = {config.UPPER_FORMULA}"
+    f1_label = config.F1_LABEL or f"y = {config.F1_FORMULA}"
+    f2_label = config.F2_LABEL or f"y = {config.F2_FORMULA}"
     boundaries = [
-        {"func": lower_func, "label": lower_label, "color": config.LOWER_COLOR},
-        {"func": upper_func, "label": upper_label, "color": config.UPPER_COLOR},
+        {"func": f1, "label": f1_label, "color": config.F1_COLOR},
+        {"func": f2, "label": f2_label, "color": config.F2_COLOR},
     ]
     return contains, boundaries
+
+
+def validate_config():
+    """Проверяем числовые параметры эксперимента."""
+    if int(config.N_POINTS) <= 0:
+        raise ValueError("Параметр N_POINTS должен быть больше нуля.")
+    if int(config.CURVE_SAMPLES) < 2:
+        raise ValueError("Параметр CURVE_SAMPLES должен быть не меньше 2.")
+    if not np.isfinite(float(config.X0)) or not np.isfinite(float(config.Y0)):
+        raise ValueError("Координаты X0 и Y0 должны быть конечными числами.")
 
 
 def get_square_bounds():
@@ -121,7 +141,7 @@ def build_output_basename(output_dir):
 def plot_results(x_rand, y_rand, inside_mask, estimated_area, boundaries, bounds):
     """Строим график и сохраняем его в plots/."""
     x_min, x_max, y_min, y_max = bounds
-    output_dir = Path(config.PLOT_DIR)
+    output_dir = Path(__file__).resolve().parent / config.PLOT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
     plt.figure(figsize=config.FIGURE_SIZE)
@@ -192,6 +212,7 @@ def plot_results(x_rand, y_rand, inside_mask, estimated_area, boundaries, bounds
 
 def main():
     try:
+        validate_config()
         contains, boundaries = build_region_model()
         bounds = get_square_bounds()
     except ValueError as exc:
@@ -210,8 +231,8 @@ def main():
     print(f"Оценочная площадь: {estimated_area:.6f}")
     print(f"Оценка погрешности (±1σ): {error:.6f}")
     print(f"Опорный квадрат: центр=({config.X0}, {config.Y0}), a={config.A}")
-    print(f"Нижняя граница: y = {config.LOWER_FORMULA}")
-    print(f"Верхняя граница: y = {config.UPPER_FORMULA}")
+    print(f"Первая граница: y = {config.F1_FORMULA}")
+    print(f"Вторая граница: y = {config.F2_FORMULA}")
     print("Файлы графика:")
     for path in saved_paths:
         print(f"- {path}")

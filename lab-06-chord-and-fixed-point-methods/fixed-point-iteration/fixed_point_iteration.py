@@ -1,41 +1,52 @@
 from datetime import datetime
+from html import escape
 import json
 from pathlib import Path
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 import config
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from common import LAB5_CONFIG as root_config
+from common import bisect_root, compile_formula, formula_to_javascript
+
+
+PHI = compile_formula(config.PHI_FORMULA)
+PHI_PRIME = compile_formula(config.PHI_DERIVATIVE_FORMULA)
+
 
 def phi(x):
-    """Вычисляем значение phi(x) = 5 / (x^2 + 2x + 5)."""
-    x_values = np.asarray(x, dtype=float)
-    return 5.0 / (x_values**2 + 2.0 * x_values + 5.0)
+    """Вычисляем значение phi(x) из config.py."""
+    return PHI(np.asarray(x, dtype=float))
 
 
 def phi_prime(x):
-    """Вычисляем производную phi'(x)."""
-    x_values = np.asarray(x, dtype=float)
-    denominator = (x_values**2 + 2.0 * x_values + 5.0) ** 2
-    return -10.0 * (x_values + 1.0) / denominator
+    """Вычисляем производную phi'(x) из config.py."""
+    return PHI_PRIME(np.asarray(x, dtype=float))
 
 
 def control_root():
     """Находим контрольный корень уравнения x = phi(x)."""
-    roots = np.roots([1.0, 2.0, 5.0, -5.0])
-    real_roots = [root.real for root in roots if abs(root.imag) < 1e-10]
-    if not real_roots:
-        raise ValueError("Не удалось найти действительный контрольный корень.")
-    return float(real_roots[0])
+    return bisect_root(
+        lambda x: float(phi(x)) - x,
+        config.CONTROL_A,
+        config.CONTROL_B,
+        root_config.REFERENCE_EPSILON,
+        root_config.REFERENCE_N_MAX,
+    )
 
 
 def validate_config():
     """Проверяем корректность входных параметров."""
-    if config.EPSILON <= 0:
+    if root_config.EPSILON <= 0:
         raise ValueError("Параметр EPSILON должен быть больше нуля.")
-    if int(config.N_MAX) <= 0:
+    if int(root_config.N_MAX) <= 0:
         raise ValueError("Параметр N_MAX должен быть больше нуля.")
+    if config.CONTROL_B <= config.CONTROL_A:
+        raise ValueError("CONTROL_B должен быть больше CONTROL_A.")
     if int(config.CURVE_SAMPLES) < 2:
         raise ValueError("Параметр CURVE_SAMPLES должен быть не меньше 2.")
     if config.DOMAIN_X_MAX <= config.DOMAIN_X_MIN:
@@ -53,13 +64,19 @@ def validate_config():
     if not np.isfinite(float(config.X0)):
         raise ValueError("Параметр X0 должен быть конечным числом.")
 
+    check_x = np.linspace(config.CHECK_X_MIN, config.CHECK_X_MAX, int(config.CURVE_SAMPLES))
+    if not np.all(np.isfinite(phi(check_x))):
+        raise ValueError("PHI_FORMULA должна быть конечной на интервале проверки.")
+    if not np.all(np.isfinite(phi_prime(check_x))):
+        raise ValueError("PHI_DERIVATIVE_FORMULA должна быть конечной на интервале проверки.")
+
 
 def fixed_point_iteration():
     """Находим неподвижную точку методом простой итерации."""
     x_previous = float(config.X0)
     history = []
 
-    for iteration in range(1, int(config.N_MAX) + 1):
+    for iteration in range(1, int(root_config.N_MAX) + 1):
         x_next = float(phi(x_previous))
         if not np.isfinite(x_next):
             raise ValueError("Итерации вышли за область конечных чисел.")
@@ -67,7 +84,7 @@ def fixed_point_iteration():
         delta = abs(x_next - x_previous)
         history.append((iteration, x_previous, x_next, delta))
 
-        if delta < config.EPSILON:
+        if delta < root_config.EPSILON:
             return {
                 "root": x_next,
                 "iterations": iteration,
@@ -80,7 +97,7 @@ def fixed_point_iteration():
 
     return {
         "root": x_previous,
-        "iterations": int(config.N_MAX),
+        "iterations": int(root_config.N_MAX),
         "last_delta": history[-1][3] if history else np.inf,
         "status": "Достигнут лимит N_MAX",
         "history": history,
@@ -144,7 +161,7 @@ def plot_base_curves(ax, x_min, x_max, root=None):
         y_phi,
         color=config.PHI_COLOR,
         linewidth=2.2,
-        label=config.PHI_LABEL,
+        label=config.PHI_LABEL or f"φ(x) = {config.PHI_FORMULA}",
         zorder=3,
     )
     ax.plot(
@@ -201,13 +218,14 @@ def plot_derivative(report_values):
     x_line = np.linspace(config.CHECK_X_MIN, config.CHECK_X_MAX, int(config.CURVE_SAMPLES))
     derivative_line = phi_prime(x_line)
     root = report_values["exact"]
+    comparison = "< 1" if report_values["max_abs_derivative"] < 1.0 else ">= 1"
 
     ax.plot(
         x_line,
         derivative_line,
         color=config.DERIVATIVE_COLOR,
         linewidth=2.2,
-        label=r"$\varphi'(x)=-\frac{10(x+1)}{(x^2+2x+5)^2}$",
+        label=config.PHI_DERIVATIVE_LABEL or f"φ'(x) = {config.PHI_DERIVATIVE_FORMULA}",
     )
     ax.axhline(
         1.0,
@@ -235,7 +253,7 @@ def plot_derivative(report_values):
         0.03,
         0.06,
         f"На [{config.CHECK_X_MIN:g}; {config.CHECK_X_MAX:g}]:\n"
-        f"max |φ'(x)| ≈ {report_values['max_abs_derivative']:.6f} < 1\n"
+        f"max |φ'(x)| ≈ {report_values['max_abs_derivative']:.6f} {comparison}\n"
         f"φ([{config.CHECK_X_MIN:g}; {config.CHECK_X_MAX:g}]) "
         f"⊂ [{report_values['phi_min']:.6f}; {report_values['phi_max']:.6f}]",
         transform=ax.transAxes,
@@ -376,12 +394,14 @@ def build_interactive_html(result):
         },
     }
     data_json = json.dumps(payload, ensure_ascii=False)
+    phi_javascript = formula_to_javascript(config.PHI_FORMULA)
+    phi_formula_html = escape(config.PHI_FORMULA)
 
     return f"""<!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <title>Lab 05: интерактивная улитка</title>
+  <title>Lab 06: интерактивная улитка</title>
   <style>
     body {{
       margin: 0;
@@ -438,7 +458,7 @@ def build_interactive_html(result):
   </header>
   <div id="toolbar">
     <button id="reset">Сбросить вид</button>
-    <span class="hint">φ(x)=5/(x²+2x+5), x₀={float(config.X0):g}, корень≈{float(result["root"]):.15f}</span>
+    <span class="hint">φ(x)={phi_formula_html}, x₀={float(config.X0):g}, корень≈{float(result["root"]):.15f}</span>
   </div>
   <canvas id="canvas"></canvas>
   <script>
@@ -451,7 +471,7 @@ def build_interactive_html(result):
     let lastMouse = null;
 
     function phi(x) {{
-      return 5 / (x * x + 2 * x + 5);
+      return {phi_javascript};
     }}
 
     function resize() {{
@@ -703,15 +723,16 @@ def plot_results(result, report_values):
 def print_report(result, report_values, saved_paths):
     """Выводим краткий итоговый отчёт в консоль."""
     root = result["root"]
+    comparison = "< 1" if report_values["max_abs_derivative"] < 1.0 else ">= 1"
 
     print("=" * 70)
-    print("ЛАБОРАТОРНАЯ РАБОТА №5: МЕТОД ПРОСТОЙ ИТЕРАЦИИ")
+    print("ЛАБОРАТОРНАЯ РАБОТА №6: МЕТОД ПРОСТОЙ ИТЕРАЦИИ")
     print("=" * 70)
     print("Уравнение: x = phi(x)")
-    print("phi(x) = 5 / (x^2 + 2x + 5)")
-    print("phi'(x) = -10(x + 1) / (x^2 + 2x + 5)^2")
+    print(f"phi(x) = {config.PHI_FORMULA}")
+    print(f"phi'(x) = {config.PHI_DERIVATIVE_FORMULA}")
     print(f"Начальное приближение: x0 = {config.X0:g}")
-    print(f"Условия останова: Δx < {config.EPSILON:.0e} или N_MAX = {int(config.N_MAX)}")
+    print(f"Условия останова: Δx < {root_config.EPSILON:.0e} или N_MAX = {int(root_config.N_MAX)}")
     print(f"Интервал проверки сходимости: [{config.CHECK_X_MIN:g}; {config.CHECK_X_MAX:g}]")
     print("-" * 70)
     print(f"Найденная неподвижная точка x_hat: {root:.15f}")
@@ -719,7 +740,7 @@ def print_report(result, report_values, saved_paths):
     print(f"|x_hat - x*|:                      {report_values['absolute_error']:.3e}")
     print(f"|x_hat - phi(x_hat)|:              {report_values['residual']:.3e}")
     print(f"phi'(x_hat):                       {report_values['derivative_at_root']:.6f}")
-    print(f"max |phi'(x)| на интервале:        {report_values['max_abs_derivative']:.6f} < 1")
+    print(f"max |phi'(x)| на интервале:        {report_values['max_abs_derivative']:.6f} {comparison}")
     print(f"Итераций:                          {result['iterations']}")
     print(f"Остановка:                         {result['status']} (Δx = {result['last_delta']:.3e})")
     print("-" * 70)

@@ -1,39 +1,45 @@
 from datetime import datetime
 from pathlib import Path
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 import config
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from common import LAB5_CONFIG as root_config
+from common import compile_formula, get_lab5_reference_root
+
+
+FUNCTION = compile_formula(root_config.FUNCTION_FORMULA)
+
 
 def f(x):
-    """Вычисляем значение функции f(x) = 2 / (x^2 - x + 1)^2 - 1."""
-    x_values = np.asarray(x, dtype=float)
-    denominator = (x_values**2 - x_values + 1.0) ** 2
-    return 2.0 / denominator - 1.0
+    """Вычисляем значение функции из конфигурации лабораторной №5."""
+    return FUNCTION(np.asarray(x, dtype=float))
 
 
 def exact_root():
-    """Возвращаем точный корень функции на отрезке [0; 2]."""
-    return float((1.0 + np.sqrt(4.0 * np.sqrt(2.0) - 3.0)) / 2.0)
+    """Возвращаем контрольный корень из конфигурации лабораторной №5."""
+    return get_lab5_reference_root(f)
 
 
 def validate_config():
     """Проверяем корректность входных параметров."""
-    if config.B <= config.A:
+    if root_config.B <= root_config.A:
         raise ValueError("Параметр B должен быть больше A.")
-    if config.EPSILON <= 0:
+    if root_config.EPSILON <= 0:
         raise ValueError("Параметр EPSILON должен быть больше нуля.")
-    if int(config.N_MAX) <= 0:
+    if int(root_config.N_MAX) <= 0:
         raise ValueError("Параметр N_MAX должен быть больше нуля.")
     if int(config.CURVE_SAMPLES) < 2:
         raise ValueError("Параметр CURVE_SAMPLES должен быть не меньше 2.")
     if int(config.MAX_CHORDS_SHOW) < 0:
         raise ValueError("Параметр MAX_CHORDS_SHOW не может быть отрицательным.")
 
-    fa = float(f(config.A))
-    fb = float(f(config.B))
+    fa = float(f(root_config.A))
+    fb = float(f(root_config.B))
     if fa == 0.0 or fb == 0.0:
         return
     if fa * fb > 0:
@@ -42,8 +48,8 @@ def validate_config():
 
 def chord_method():
     """Находим корень методом хорд с остановом по N_MAX или Δx < EPSILON."""
-    a = float(config.A)
-    b = float(config.B)
+    a = float(root_config.A)
+    b = float(root_config.B)
     fa = float(f(a))
     fb = float(f(b))
     history = []
@@ -69,7 +75,7 @@ def chord_method():
     x_current = None
     last_delta = np.inf
 
-    for iteration in range(1, int(config.N_MAX) + 1):
+    for iteration in range(1, int(root_config.N_MAX) + 1):
         denominator = fb - fa
         if denominator == 0.0:
             raise ValueError("Невозможно построить хорду: f(a) и f(b) совпали.")
@@ -89,7 +95,7 @@ def chord_method():
                 "history": history,
             }
 
-        if last_delta < config.EPSILON:
+        if last_delta < root_config.EPSILON:
             return {
                 "root": x_current,
                 "iterations": iteration,
@@ -109,7 +115,7 @@ def chord_method():
 
     return {
         "root": x_current,
-        "iterations": int(config.N_MAX),
+        "iterations": int(root_config.N_MAX),
         "last_delta": last_delta,
         "status": "Достигнут лимит N_MAX",
         "history": history,
@@ -153,8 +159,8 @@ def save_figure(fig, output_dir, base_name):
 
 def plot_base_function(ax, exact, root=None, show_interval=True):
     """Рисуем функцию, ось Ox, исходный отрезок и корень."""
-    x_margin = (config.B - config.A) * 0.08
-    x_line = np.linspace(config.A - x_margin, config.B + x_margin, int(config.CURVE_SAMPLES))
+    x_margin = (root_config.B - root_config.A) * 0.08
+    x_line = np.linspace(root_config.A - x_margin, root_config.B + x_margin, int(config.CURVE_SAMPLES))
     y_line = f(x_line)
 
     ax.plot(
@@ -162,17 +168,17 @@ def plot_base_function(ax, exact, root=None, show_interval=True):
         y_line,
         color=config.FUNCTION_COLOR,
         linewidth=2.2,
-        label=config.FUNCTION_LABEL,
+        label=root_config.FUNCTION_LABEL or f"f(x) = {root_config.FUNCTION_FORMULA}",
         zorder=3,
     )
     ax.axhline(0, color="#000000", linewidth=1.0)
     if show_interval:
         ax.axvspan(
-            config.A,
-            config.B,
+            root_config.A,
+            root_config.B,
             color=config.INTERVAL_COLOR,
             alpha=0.08,
-            label=f"Исходный отрезок [{config.A:g}; {config.B:g}]",
+            label=f"Исходный отрезок [{root_config.A:g}; {root_config.B:g}]",
         )
     ax.axvline(
         exact,
@@ -197,13 +203,13 @@ def plot_base_function(ax, exact, root=None, show_interval=True):
 def plot_overview(result, exact):
     """Строим общий график без лишних учебных обозначений."""
     fig, ax = plt.subplots(figsize=config.OVERVIEW_FIGURE_SIZE)
-    x_margin = (config.B - config.A) * 0.08
+    x_margin = (root_config.B - root_config.A) * 0.08
     root = result["root"]
     _, y_line = plot_base_function(ax, exact, root=root, show_interval=True)
 
     y_finite = y_line[np.isfinite(y_line)]
     y_padding = (float(np.max(y_finite)) - float(np.min(y_finite))) * 0.08
-    ax.set_xlim(config.A - x_margin, config.B + x_margin)
+    ax.set_xlim(root_config.A - x_margin, root_config.B + x_margin)
     ax.set_ylim(float(np.min(y_finite)) - y_padding, float(np.max(y_finite)) + y_padding)
     ax.set_title("Общий график функции")
     ax.set_xlabel("x")
@@ -327,11 +333,11 @@ def print_report(result, exact, absolute_error, saved_paths):
     root = result["root"]
 
     print("=" * 64)
-    print("ЛАБОРАТОРНАЯ РАБОТА №5: МЕТОД ХОРД")
+    print("ЛАБОРАТОРНАЯ РАБОТА №6: МЕТОД ХОРД")
     print("=" * 64)
-    print("Функция: f(x) = 2 / (x^2 - x + 1)^2 - 1")
-    print(f"Отрезок: [{config.A:g}; {config.B:g}]")
-    print(f"Условия останова: Δx < {config.EPSILON:.0e} или N_MAX = {int(config.N_MAX)}")
+    print(f"Функция из lab-05: f(x) = {root_config.FUNCTION_FORMULA}")
+    print(f"Отрезок: [{root_config.A:g}; {root_config.B:g}]")
+    print(f"Условия останова: Δx < {root_config.EPSILON:.0e} или N_MAX = {int(root_config.N_MAX)}")
     print("-" * 64)
     print(f"Найденный корень x_hat: {root:.15f}")
     print(f"Точный корень x*:       {exact:.15f}")
