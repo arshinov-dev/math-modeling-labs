@@ -1,6 +1,6 @@
 # 📊 Math Modeling Labs
 
-[![Status](https://img.shields.io/badge/статус-Учебный-2a9d8f)](https://github.com/topics/arh-education)
+[![Status](https://img.shields.io/badge/статус-archive-black)](https://github.com/topics/arh-education)
 [![License](https://img.shields.io/badge/лицензия-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white&style=flat)](https://www.python.org/)
 [![NumPy](https://img.shields.io/badge/NumPy-013243?logo=numpy&logoColor=white&style=flat)](https://numpy.org/)
